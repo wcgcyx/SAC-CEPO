@@ -63,7 +63,7 @@ class Agent:
     def get_rollout_action(self, state):
         state = torch.FloatTensor(state).unsqueeze(0).to(device)
         mean, _ = self.policy_net.forward(state)
-        return mean.cpu()[0].detach()
+        return mean.tanh().cpu()[0].detach()
 
     def store_transition(self, state, action, reward, next_state, end):
         self.memory.push(state, action, reward, next_state, end)
