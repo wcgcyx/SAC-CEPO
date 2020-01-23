@@ -44,7 +44,7 @@ def train():
         while True:
             print("{}\r".format(step), end='')
             action = agent.choose_action(state)
-            next_state, reward, end, _ = env.step(action.numpy())
+            next_state, reward, end, _ = env.step(action)
             step += 1
             agent.store_transition(state, action, reward, next_state, end * 1)
             agent.learn()
@@ -74,7 +74,7 @@ def rollout(agent, env):
         total_reward = 0
         while True:
             action = agent.get_rollout_action(state)
-            next_state, reward, end, _ = env.step(action.numpy())
+            next_state, reward, end, _ = env.step(action)
             state = next_state
             total_reward += reward
             if end:

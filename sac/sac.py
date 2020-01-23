@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.distributions import Normal
-from .memory import ReplayBuffer
+from .memory import ReplayMemory, Transition
 
 # Get device
 use_cuda = torch.cuda.is_available()
@@ -29,8 +29,9 @@ class Agent:
         self.tau = tau
         self.log_std_min = log_std_min
         self.log_std_max = log_std_max
-        self.memory = ReplayBuffer(memory_size)
+        self.memory = ReplayMemory(memory_size)
         self.batch_size = batch_size
+        self.normal = Normal(torch.tensor(0.0).to(device), torch.tensor(1.0).to(device))
         # SAC has five networks
         # Two Q Networks, One V Network, One Target-V Network and One Policy Network
         self.q_net_1 = QNetwork(state_dim, action_dim).to(device)
@@ -42,30 +43,36 @@ class Agent:
         self.target_v_net = VNetwork(state_dim).to(device)
         for target_param, param in zip(self.target_v_net.parameters(), self.v_net.parameters()):
             target_param.data.copy_(param.data)
-        self.policy_net = PolicyNetwork(state_dim, action_dim, log_std_min, log_std_max).to(device)
+        self.policy_net = PolicyNetwork(state_dim, action_dim, log_std_min, log_std_max, self.normal).to(device)
         self.policy_net_optimizer = optim.Adam(self.policy_net.parameters(), lr=lr)
 
     def choose_action(self, state):
         state = torch.FloatTensor(state).unsqueeze(0).to(device)
         action, _ = self.policy_net.predict(state)
-        return action.cpu()[0].detach()
+        return action.cpu()[0].detach().numpy()
 
     def get_rollout_action(self, state):
         state = torch.FloatTensor(state).unsqueeze(0).to(device)
         mean, _ = self.policy_net.forward(state)
-        return mean.tanh().cpu()[0].detach()
+        return mean.tanh().cpu()[0].detach().numpy()
 
     def store_transition(self, state, action, reward, next_state, end):
+        state = torch.FloatTensor(state).unsqueeze(0).to(device)
+        action = torch.FloatTensor(action).unsqueeze(0).to(device)
+        reward = torch.FloatTensor([reward]).unsqueeze(0).to(device)
+        next_state = torch.FloatTensor(next_state).unsqueeze(0).to(device)
+        end = torch.FloatTensor([end]).unsqueeze(0).to(device)
         self.memory.push(state, action, reward, next_state, end)
 
     def learn(self):
         # Sample experiences
-        state, action, reward, next_state, end = self.memory.sample(self.batch_size)
-        state = torch.FloatTensor(state).to(device)
-        action = torch.FloatTensor(action).to(device)
-        reward = torch.FloatTensor(reward).unsqueeze(1).to(device)
-        next_state = torch.FloatTensor(next_state).to(device)
-        end = torch.FloatTensor(end).unsqueeze(1).to(device)
+        transitions = self.memory.sample(self.batch_size)
+        batch = Transition(*zip(*transitions))
+        state = torch.cat(batch.state)
+        action = torch.cat(batch.action)
+        reward = torch.cat(batch.reward)
+        next_state = torch.cat(batch.next_state)
+        end = torch.cat(batch.end)
 
         # Training Q Networks
         predicted_q_value_1 = self.q_net_1.forward(state, action)
@@ -139,11 +146,12 @@ class VNetwork(nn.Module):
 
 class PolicyNetwork(nn.Module):
 
-    def __init__(self, state_dim, action_dim, log_std_min, log_std_max):
+    def __init__(self, state_dim, action_dim, log_std_min, log_std_max, normal):
         super(PolicyNetwork, self).__init__()
 
         self.log_std_min = log_std_min
         self.log_std_max = log_std_max
+        self.normal = normal
 
         self.layer1 = nn.Linear(state_dim, 256)
         self.layer2 = nn.Linear(256, 256)
@@ -165,9 +173,8 @@ class PolicyNetwork(nn.Module):
         mean, log_std = self.forward(state)
         std = log_std.exp()
 
-        normal = Normal(0, 1)
-        z = normal.sample(sample_shape=std.shape)
-        action_raw = mean + std * z.to(device)
+        z = self.normal.sample(sample_shape=std.shape)
+        action_raw = mean + std * z
         action = torch.tanh(action_raw)
         log_prob = Normal(mean, std).log_prob(action_raw) - torch.log(1 - action.pow(2) + epsilon)
         log_prob = log_prob.sum(-1, keepdim=True)
