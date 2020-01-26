@@ -86,6 +86,34 @@ class Agent:
         next_state = torch.cat(batch.next_state)
         end = torch.cat(batch.end)
 
+        # Training Q Networks
+        predicted_q_value_1 = self.q_net_1.forward(state, action)
+        predicted_q_value_2 = self.q_net_2.forward(state, action)
+        predicted_v_target = self.target_v_net.forward(next_state)
+        target_q_value = reward + (1 - end) * self.discount * predicted_v_target
+        q_loss_1 = nn.MSELoss()(predicted_q_value_1, target_q_value.detach())
+        q_loss_2 = nn.MSELoss()(predicted_q_value_2, target_q_value.detach())
+        self.q_net_1_optimizer.zero_grad()
+        q_loss_1.backward()
+        self.q_net_1_optimizer.step()
+        self.q_net_2_optimizer.zero_grad()
+        q_loss_2.backward()
+        self.q_net_2_optimizer.step()
+
+        # Training V Network
+        predicted_v_value = self.v_net.forward(state)
+        # Get new action and log-prob
+        new_action, log_prob = self.policy_net.predict(state)
+        # Learning
+        predicted_new_q_value_1 = self.q_net_1.forward(state, new_action)
+        predicted_new_q_value_2 = self.q_net_2.forward(state, new_action)
+        predicted_new_q_value = torch.min(predicted_new_q_value_1, predicted_new_q_value_2)
+        target_v_value = predicted_new_q_value - self.alpha * log_prob
+        v_loss = nn.MSELoss()(predicted_v_value, target_v_value.detach())
+        self.v_net_optimizer.zero_grad()
+        v_loss.backward()
+        self.v_net_optimizer.step()
+
         # Search for the most optimal policy based on the current value function
         # Initialize start location
         old_mean, old_log_std = self.policy_net.forward(state)
@@ -109,39 +137,6 @@ class Agent:
 
         length = location.shape[1] // 2
         target_mean, target_log_std = torch.split(location, length, dim=1)
-
-        # Training Q Networks
-        predicted_q_value_1 = self.q_net_1.forward(state, action)
-        predicted_q_value_2 = self.q_net_2.forward(state, action)
-        predicted_v_target = self.target_v_net.forward(next_state)
-        target_q_value = reward + (1 - end) * self.discount * predicted_v_target
-        q_loss_1 = nn.MSELoss()(predicted_q_value_1, target_q_value.detach())
-        q_loss_2 = nn.MSELoss()(predicted_q_value_2, target_q_value.detach())
-        self.q_net_1_optimizer.zero_grad()
-        q_loss_1.backward()
-        self.q_net_1_optimizer.step()
-        self.q_net_2_optimizer.zero_grad()
-        q_loss_2.backward()
-        self.q_net_2_optimizer.step()
-
-        # Training V Network
-        predicted_v_value = self.v_net.forward(state)
-        # Get new action and log-prob
-        target_std = target_log_std.exp()
-        z = self.normal.sample(sample_shape=target_std.shape)
-        action_raw = target_mean + target_std * z
-        new_action = torch.tanh(action_raw)
-        log_prob = Normal(target_mean, target_std).log_prob(action_raw) - torch.log(1 - new_action.pow(2) + 1e-6)
-        log_prob = log_prob.sum(-1, keepdim=True)
-        # Learning
-        predicted_new_q_value_1 = self.q_net_1.forward(state, new_action)
-        predicted_new_q_value_2 = self.q_net_2.forward(state, new_action)
-        predicted_new_q_value = torch.min(predicted_new_q_value_1, predicted_new_q_value_2)
-        target_v_value = predicted_new_q_value - self.alpha * log_prob
-        v_loss = nn.MSELoss()(predicted_v_value, target_v_value.detach())
-        self.v_net_optimizer.zero_grad()
-        v_loss.backward()
-        self.v_net_optimizer.step()
 
         # Training Policy Network
         predicted_mean, predicted_log_std = self.policy_net.forward(state)
