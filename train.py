@@ -1,6 +1,6 @@
 import sys
 import sac
-import sac_cepo
+import sac_cepo2
 from utils import get_normalized_env
 
 
@@ -18,7 +18,7 @@ def train():
     if agent_name == 'sac':
         agent = sac.Agent(state_dim=state_dim, action_dim=action_dim, alpha=1 / reward_scale)
     else:
-        agent = sac_cepo.Agent(state_dim=state_dim, action_dim=action_dim, alpha=1 / reward_scale)
+        agent = sac_cepo2.Agent(state_dim=state_dim, action_dim=action_dim, alpha=1 / reward_scale)
 
     # Initial exploration for 1000 steps
     step = 0
