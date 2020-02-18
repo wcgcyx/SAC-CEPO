@@ -149,11 +149,12 @@ class Agent:
         self.policy_mean_net_optimizer.step()
 
         # Training Policy Std Network
+        new_mean = self.policy_mean_net.forward(state).detach()
         std = self.policy_std_net.forward(state)
         z = self.normal.sample(sample_shape=std.shape)
-        action_raw = target_mean + std * z
+        action_raw = new_mean + std * z
         new_action = torch.tanh(action_raw)
-        log_prob = Normal(target_mean, std).log_prob(action_raw) - torch.log(1 - new_action.pow(2) + 1e-6)
+        log_prob = Normal(new_mean, std).log_prob(action_raw) - torch.log(1 - new_action.pow(2) + 1e-6)
         log_prob = log_prob.sum(-1, keepdim=True)
         predicted_new_q_value_1 = self.q_net_1.forward(state, new_action)
         predicted_new_q_value_2 = self.q_net_2.forward(state, new_action)

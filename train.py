@@ -49,8 +49,8 @@ def train():
             agent.store_transition(state, action, reward, next_state, end * 1)
             agent.learn()
             state = next_state
-            if step % 1000 == 0:
-                # Evaluate every 1000 step, print and save to file
+            if step % 10000 == 0:
+                # Evaluate every 10000 step, print and save to file
                 evaluate_reward = rollout(agent, eval_env)
                 print(step, evaluate_reward)
                 with open(output_file, "a") as file:
