@@ -5,11 +5,17 @@ from utils import get_normalized_env
 
 
 def train():
+    print("Usage: py -3 train.py agent_name N Ne size t task reward_scale max_step evaluate_step output_file")
     agent_name = sys.argv[1]
-    task = sys.argv[2]
-    reward_scale = int(sys.argv[3])
-    max_step = int(sys.argv[4])
-    output_file = sys.argv[5]
+    N = int(sys.argv[2])
+    Ne = int(sys.argv[3])
+    size = float(sys.argv[4])
+    t = float(sys.argv[5])
+    task = sys.argv[6]
+    reward_scale = int(sys.argv[7])
+    max_step = int(sys.argv[8])
+    evaluate_step = int(sys.argv[9])
+    output_file = sys.argv[10]
     # Load environment and agent
     env = get_normalized_env(task)
     eval_env = get_normalized_env(task)
@@ -18,7 +24,8 @@ def train():
     if agent_name == 'sac':
         agent = sac.Agent(state_dim=state_dim, action_dim=action_dim, alpha=1 / reward_scale)
     else:
-        agent = sac_cepo.Agent(state_dim=state_dim, action_dim=action_dim, alpha=1 / reward_scale)
+        agent = sac_cepo.Agent(state_dim=state_dim, action_dim=action_dim, alpha=1 / reward_scale,
+                               ce_n=N, ce_ne=Ne, ce_size=size, ce_t=t)
 
     # Initial exploration for 1000 steps
     step = 0
@@ -42,15 +49,13 @@ def train():
     while True:
         state = env.reset()
         while True:
-            print("{}\r".format(step), end='')
             action = agent.choose_action(state)
             next_state, reward, end, _ = env.step(action)
             step += 1
             agent.store_transition(state, action, reward, next_state, end * 1)
             agent.learn()
             state = next_state
-            if step % 10000 == 0:
-                # Evaluate every 10000 step, print and save to file
+            if step % evaluate_step == 0:
                 evaluate_reward = rollout(agent, eval_env)
                 print(step, evaluate_reward)
                 with open(output_file, "a") as file:
@@ -84,7 +89,7 @@ def rollout(agent, env):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 6:
-        print("Usage: py -3 train.py agent_name task reward_scale max_step output_file")
+    if len(sys.argv) != 11:
+        print("Usage: py -3 train.py agent_name N Ne size t task reward_scale max_step evaluate_step output_file")
         exit(1)
     train()
