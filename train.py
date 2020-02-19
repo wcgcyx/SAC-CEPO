@@ -5,17 +5,17 @@ from utils import get_normalized_env
 
 
 def train():
-    print("Usage: py -3 train.py agent_name N Ne size t task reward_scale max_step evaluate_step output_file")
     agent_name = sys.argv[1]
     N = int(sys.argv[2])
     Ne = int(sys.argv[3])
     size = float(sys.argv[4])
-    t = float(sys.argv[5])
+    t = int(sys.argv[5])
     task = sys.argv[6]
     reward_scale = int(sys.argv[7])
     max_step = int(sys.argv[8])
     evaluate_step = int(sys.argv[9])
     output_file = sys.argv[10]
+    print("Agent: {} with {} {} {} {}".format(agent_name, N, Ne, size, t))
     # Load environment and agent
     env = get_normalized_env(task)
     eval_env = get_normalized_env(task)
